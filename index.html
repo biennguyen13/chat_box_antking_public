@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bollinger Bands Demo</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #1a2a6c, #b21f1f, #1a2a6c);
+        color: white;
+        min-height: 100vh;
+        padding: 20px;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+
+      h1 {
+        text-align: center;
+        margin-bottom: 20px;
+        font-size: 2rem;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+      }
+
+      .chart-container {
+        width: 100%;
+        height: 500px;
+        background-image: url("./world_map.dcb516b1.svg");
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Bollinger Bands with Fill Effect</h1>
+      <div id="chart" class="chart-container"></div>
+    </div>
+
+    <!-- Lightweight Charts CDN -->
+    <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+
+    <script>
+      // Hàm tính SMA
+      function sma(data, window) {
+        const result = []
+        for (let i = 0; i < data.length; i++) {
+          if (i < window - 1) {
+            result.push(NaN)
+            continue
+          }
+          const slice = data.slice(i - window + 1, i + 1)
+          const sum = slice.reduce((a, b) => a + b, 0)
+          result.push(sum / window)
+        }
+        return result
+      }
+
+      // Hàm tính độ lệch chuẩn
+      function stdDev(data, window) {
+        const result = []
+        for (let i = 0; i < data.length; i++) {
+          if (i < window - 1) {
+            result.push(NaN)
+            continue
+          }
+          const slice = data.slice(i - window + 1, i + 1)
+          const mean = slice.reduce((a, b) => a + b, 0) / window
+          const squareDiffs = slice.map((value) => Math.pow(value - mean, 2))
+          const avgSquareDiff = squareDiffs.reduce((a, b) => a + b, 0) / window
+          result.push(Math.sqrt(avgSquareDiff))
+        }
+        return result
+      }
+
+      // Hàm tính Bollinger Bands
+      function calculateBollingerBands(closes, window = 20, multiplier = 2) {
+        const middle = sma(closes, window)
+        const std = stdDev(closes, window)
+
+        const upper = middle.map((m, i) => m + std[i] * multiplier)
+        const lower = middle.map((m, i) => m - std[i] * multiplier)
+
+        return { middle, upper, lower }
+      }
+
+      // Tạo dữ liệu mẫu mô phỏng giá coin
+      function generateSampleData() {
+        const data = []
+        let price = 45000 // BTC price
+        const startDate = new Date("2024-01-01")
+
+        for (let i = 0; i < 50; i++) {
+          const time = new Date(startDate)
+          time.setDate(startDate.getDate() + i)
+
+          const change = (Math.random() - 0.5) * 0.03 // ±1.5% change
+          const open = price
+          price = price * (1 + change)
+          const close = price
+          const high = Math.max(open, close) * (1 + Math.random() * 0.01)
+          const low = Math.min(open, close) * (1 - Math.random() * 0.01)
+
+          data.push({
+            time: time.toISOString().split("T")[0],
+            open: parseFloat(open.toFixed(2)),
+            high: parseFloat(high.toFixed(2)),
+            low: parseFloat(low.toFixed(2)),
+            close: parseFloat(close.toFixed(2)),
+          })
+        }
+
+        return data
+      }
+
+      // Khởi tạo chart
+      document.addEventListener("DOMContentLoaded", function () {
+        const chartContainer = document.getElementById("chart")
+
+        const chart = LightweightCharts.createChart(chartContainer, {
+          width: chartContainer.clientWidth,
+          height: 500,
+          // layout: {
+          //   backgroundColor: "transparent",
+          //   textColor: "rgba(255, 255, 255, 0.9)",
+          // },
+          layout: {
+            background: { type: "solid", color: "transparent" }, // Quan trọng!
+            textColor: "#ffffff",
+          },
+          grid: {
+            vertLines: { color: "rgba(255, 255, 255, 0.1)" },
+            horzLines: { color: "rgba(255, 255, 255, 0.1)" },
+          },
+          priceScale: {
+            borderColor: "rgba(255, 255, 255, 0.2)",
+          },
+          timeScale: {
+            borderColor: "rgba(255, 255, 255, 0.2)",
+            timeVisible: true,
+          },
+          handleScroll: false,
+          handleScale: false,
+        })
+
+        // Tạo dữ liệu
+        const candleData = generateSampleData()
+
+        // Thêm candlestick series
+        const candlestickSeries = chart.addCandlestickSeries({
+          upColor: "rgba(50, 205, 50, 0.8)",
+          downColor: "rgba(220, 20, 60, 0.8)",
+          borderUpColor: "rgba(50, 205, 50, 1)",
+          borderDownColor: "rgba(220, 20, 60, 1)",
+          wickUpColor: "rgba(50, 205, 50, 0.5)",
+          wickDownColor: "rgba(220, 20, 60, 0.5)",
+        })
+        candlestickSeries.setData(candleData)
+
+        // Tính Bollinger Bands
+        const closes = candleData.map((d) => d.close)
+        const { middle, upper, lower } = calculateBollingerBands(closes, 10, 2)
+
+        // Chuẩn bị dữ liệu cho line series
+        const timePoints = candleData.map((d) => d.time)
+        const middleData = timePoints
+          .map((time, i) => ({
+            time: time,
+            value: middle[i],
+          }))
+          .filter((d) => !isNaN(d.value))
+
+        const upperData = timePoints
+          .map((time, i) => ({
+            time: time,
+            value: upper[i],
+          }))
+          .filter((d) => !isNaN(d.value))
+
+        const lowerData = timePoints
+          .map((time, i) => ({
+            time: time,
+            value: lower[i],
+          }))
+          .filter((d) => !isNaN(d.value))
+
+        // === TẠO VÙNG FILL GIỮA UPPER VÀ LOWER ===
+        const fillData = []
+        // Thêm upper band
+        for (let i = 0; i < upperData.length; i++) {
+          fillData.push({
+            time: upperData[i].time,
+            value: upperData[i].value,
+          })
+        }
+        // Thêm lower band theo thứ tự ngược lại
+        for (let i = lowerData.length - 1; i >= 0; i--) {
+          fillData.push({
+            time: lowerData[i].time,
+            value: lowerData[i].value,
+          })
+        }
+
+        // Thêm Area Series để fill vùng
+        const areaSeries = chart.addAreaSeries({
+          lineWidth: 0,
+          lineColor: "transparent",
+          topColor: "rgba(106, 166, 255, 0.3)",
+          bottomColor: "rgba(106, 166, 255, 0.05)",
+        })
+        areaSeries.setData(fillData)
+
+        // === Thêm Line Series cho 3 đường Bollinger Bands ===
+        const upperSeries = chart.addLineSeries({
+          color: "rgba(0, 255, 0, 0.8)",
+          lineWidth: 1,
+        })
+        upperSeries.setData(upperData)
+
+        const middleSeries = chart.addLineSeries({
+          color: "rgba(255, 255, 255, 0.9)",
+          lineWidth: 1,
+        })
+        middleSeries.setData(middleData)
+
+        const lowerSeries = chart.addLineSeries({
+          color: "rgba(255, 0, 0, 0.8)",
+          lineWidth: 1,
+        })
+        lowerSeries.setData(lowerData)
+
+        // Responsive
+        window.addEventListener("resize", () => {
+          chart.applyOptions({
+            width: chartContainer.clientWidth,
+          })
+        })
+      })
+    </script>
+  </body>
+</html>
